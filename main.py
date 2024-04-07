@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import List
-
+import uuid
 
 from dotenv import load_dotenv
 import openai
@@ -93,6 +93,7 @@ async def main(puzzle: str) -> str:
     rules = load_rules()
     solver = solver_agent()
     memory, current_state, replay_history = await setup_memory()
+    thread_id = uuid.uuid4()
 
     messages = [
         {
@@ -131,6 +132,12 @@ async def main(puzzle: str) -> str:
                 }
             ]
         )
+
+    # Save the experience to memory
+    await memory.add_messages(thread_id=thread_id, messages=messages)
+
+    # Think and condence the experience
+    await memory.trigger_all_for_thread(thread_id=thread_id)
 
     return messages
 
