@@ -18,6 +18,9 @@ logging.basicConfig(
 logging.getLogger('httpx').setLevel(logging.CRITICAL)
 
 
+SOLVER_USER_ID = "1337"
+
+
 class State(BaseModel):
     puzzle: str = Field(
         default=None,
@@ -92,21 +95,25 @@ async def main(puzzle: str) -> str:
     logging.info("Starting A::B Challenge Solver...")
     rules = load_rules()
     solver = solver_agent()
+    experiences = ""
     memory, current_state, replay_history = await setup_memory()
-    thread_id = uuid.uuid4()
+    # TODO: grab user experience from memory
 
     messages = [
         {
             "role": "system",
-            "content": f"You are a perfect computer trained to solve A::B Challenge.\n\n## Rules:\n{rules}\n\n## Instructions\n1. Please think step by step when you solve the puzzle.\n2. You will try to solve the puzzle\n3. You will scan each puzzle from left to right to determine if there's an opportunity to apply the rules.\n4. Iterate step 2 until no replacement rules can be applied.\n5. Take extreme care and always consider all available rules listed in rules.\n6. Please say 'done' and then the state of the puzzle when there's no more available moves.\n\nPlease be very careful, as 10000 dollars is on the line. If any mistake is made my grandma's live will be in danger."
+            "content": f"You are a perfect computer trained to solve A::B Challenge.\n\n## Rules:\n{rules}\n\n## Instructions\n1. Please think step by step when you solve the puzzle.\n2. You will try to solve the puzzle\n3. You will scan each puzzle from left to right to determine if there's an opportunity to apply the rules.\n4. Iterate step 2 until no replacement rules can be applied.\n5. Take extreme care and always consider all available rules listed in rules.\n6. Please say 'done' and then the state of the puzzle when there's no more available moves.\n\n## Experiences:\n{experiences}\n\n## Additional Notes:\n\nPlease be very careful, as 10000 dollars is on the line. If any mistake is made my grandma's live will be in danger."
         },
         {
             "role": "user",
             "content": "Let's start solving the following puzzle. Please output only the next step and the reason for the choice.\n\n{puzzle}"
         }
     ]
-    
+
+
+    # Solver loop
     finished = False
+    thread_id = uuid.uuid4()
     while not finished:
         response = await solver.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -138,6 +145,7 @@ async def main(puzzle: str) -> str:
 
     # Think and condence the experience
     await memory.trigger_all_for_thread(thread_id=thread_id)
+    await memory.trigger_all_for_user(user_id=SOLVER_USER_ID)
 
     return messages
 
