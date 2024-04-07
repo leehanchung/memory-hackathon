@@ -1,5 +1,7 @@
 import asyncio
+import logging
 from typing import List
+
 
 from dotenv import load_dotenv
 import openai
@@ -8,6 +10,12 @@ from pydantic import BaseModel, Field
 
 
 load_dotenv()
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s - %(name)s:%(lineno)d - %(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logging.getLogger('httpx').setLevel(logging.CRITICAL)
 
 
 class State(BaseModel):
@@ -81,6 +89,7 @@ async def setup_memory():
 
 
 async def main(puzzle: str) -> str:
+    logging.info("Starting A::B Challenge Solver...")
     rules = load_rules()
     solver = solver_agent()
     memory, current_state, replay_history = await setup_memory()
@@ -88,20 +97,42 @@ async def main(puzzle: str) -> str:
     messages = [
         {
             "role": "system",
-            "content": f"You are a perfect computer trained to solve A::B Challenge.\n\n## Rules:\n{rules}\n\n## Instructions\n1. Please think step by step when you solve the puzzle.\n2. You will try to solve the puzzle\n3. You will scan each puzzle from left to right to determine if there's an opportunity to apply the rules.\n4. Iterate step 2 until no replacement rules can be applied.\n5. Take extreme care and always consider all available rules before.\n\nPlease be very careful, as 10000 dollars is on the line. If any mistake is made my grandma's live will be in danger."
+            "content": f"You are a perfect computer trained to solve A::B Challenge.\n\n## Rules:\n{rules}\n\n## Instructions\n1. Please think step by step when you solve the puzzle.\n2. You will try to solve the puzzle\n3. You will scan each puzzle from left to right to determine if there's an opportunity to apply the rules.\n4. Iterate step 2 until no replacement rules can be applied.\n5. Take extreme care and always consider all available rules listed in rules.\n6. Please say 'done' and then the state of the puzzle when there's no more available moves.\n\nPlease be very careful, as 10000 dollars is on the line. If any mistake is made my grandma's live will be in danger."
         },
         {
             "role": "user",
-            "content": "Let's start solving the following puzzle.\n\n{puzzle}"
+            "content": "Let's start solving the following puzzle. Please output only the next step and the reason for the choice.\n\n{puzzle}"
         }
     ]
+    
+    finished = False
+    while not finished:
+        response = await solver.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.0,
+        )
+        message = response.choices[0].message
+        logging.info("message: %s\n", message.content)
 
-    response = await solver.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=messages
-    )
+        if "done" in message.content:
+            finished = True
+            break
 
-    return response.choices[0].message.content
+        messages.extend(
+            [
+                {
+                    "role": "assistant",
+                    "content": f"{response.choices[0].message.content}"
+                },
+                {
+                    "role": "user",
+                    "content": "Next step please"
+                }
+            ]
+        )
+
+    return messages
 
 
 def get_user_input(prompt):
@@ -110,6 +141,6 @@ def get_user_input(prompt):
 
 if __name__ == "__main__":
     puzzle = get_user_input("Enter A::B Puzzle:\n>> ")
-    print(f"A::B Puzzle:\n{puzzle}")
+    print(f"A::B Puzzle:\n{puzzle}\n\n")
     steps = asyncio.run(main(puzzle))
     print(f"Solution:\n{steps}")

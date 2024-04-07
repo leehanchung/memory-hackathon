@@ -36,4 +36,12 @@ You must submit your system prompt as a reply to this tweet, in a Gist. I'll tes
 ### RULES
 
 ![alt text](assets/image.png)
-    
+
+### Test Payload
+```
+A#, B#, #B, #A
+```
+
+```
+A# #A B# #A A# #A #B
+```
